@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install OpenSCAD
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y openscad xvfb
+
+      - name: Generate STLs and PNGs
+        run: |
+          mkdir -p output
+          DESIGNS="diffuse_led_grid diffuse_led_grid_v2 led_grid_lid"
+          for design in $DESIGNS; do
+            echo "=== $design ==="
+
+            # STL
+            xvfb-run --auto-servernum openscad \
+              --render \
+              -o "output/${design}.stl" \
+              "${design}.scad"
+
+            # Front PNG (azimuth 45, elevation 55)
+            xvfb-run --auto-servernum openscad \
+              --render --autocenter --viewall \
+              --camera=0,0,0,55,0,45,0 \
+              --colorscheme=Tomorrow \
+              --imgsize=1024,1024 \
+              -o "output/${design}_front.png" \
+              "${design}.scad"
+
+            # Rear PNG (azimuth 225, elevation 55)
+            xvfb-run --auto-servernum openscad \
+              --render --autocenter --viewall \
+              --camera=0,0,0,55,0,225,0 \
+              --colorscheme=Tomorrow \
+              --imgsize=1024,1024 \
+              -o "output/${design}_rear.png" \
+              "${design}.scad"
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            output/*.stl
+            output/*_front.png
+            output/*_rear.png
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
